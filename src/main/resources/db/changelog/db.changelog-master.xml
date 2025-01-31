@@ -8,4 +8,6 @@
     <include
             file="initialisation/db.changelog-insert-roles.xml"
             relativeToChangelogFile="true"/>
+
+    <include file="initialisation/db.changelog-insert-admin-and-tester.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>

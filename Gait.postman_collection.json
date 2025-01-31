@@ -25,13 +25,31 @@
 			"response": []
 		},
 		{
-			"name": "Login",
+			"name": "Login CLIENT",
 			"request": {
 				"method": "POST",
 				"header": [],
 				"body": {
 					"mode": "raw",
 					"raw": "{\r\n  \"email\": \"john.doe@example.com\",\r\n  \"password\": \"secretPassword\"\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "http://localhost:8080/api/auth/login"
+			},
+			"response": []
+		},
+		{
+			"name": "Login ADMIN",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"email\": \"admin@example.com\",\r\n  \"password\": \"adminPass\"\r\n}\r\n",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -63,6 +81,21 @@
 					}
 				},
 				"url": "http://localhost:8080/client/use-api"
+			},
+			"response": []
+		},
+		{
+			"name": "Admin Statistics",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": {
+						"token": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbkBleGFtcGxlLmNvbSIsImlhdCI6MTczODM1OTkzMSwiZXhwIjoxNzM4NDQ2MzMxfQ.q4DwrBZTqqDBKDTmunjwqvOVYcGIaTJbVeldy4IIvMw"
+					}
+				},
+				"method": "GET",
+				"header": [],
+				"url": "http://localhost:8080/admin/call-stats"
 			},
 			"response": []
 		}

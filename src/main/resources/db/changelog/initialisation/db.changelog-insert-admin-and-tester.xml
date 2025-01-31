@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+            http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.9.xsd">
+
+    <changeSet id="insert-admin-and-tester-001" author="yourName">
+
+        <!-- Insert an ADMIN user referencing role_id=1 -->
+        <insert tableName="app_user">
+            <!-- Do not provide USER_ID since it's auto-increment -->
+            <column name="email" value="admin@example.com"/>
+            <column name="password" value="$2a$12$1gcY.NqkaywwBJNxhwnDIuKM3uy.Suf237CZZWHOjNIjSVAv6zt9q"/>
+            <column name="role_id" valueNumeric="1"/>
+            <column name="fullname" value="Admin User"/>
+            <column name="age" valueNumeric="30"/>
+        </insert>
+
+        <!-- Insert a TESTER user referencing role_id=2 -->
+        <insert tableName="app_user">
+            <column name="email" value="tester@example.com"/>
+            <column name="password" value="$2a$12$gfxl45Mz/PHKiIwJC6Fp0erzZpB5K3K0sFP9CZFbPkbTe0ugNwZOK"/>
+            <column name="role_id" valueNumeric="2"/>
+            <column name="fullname" value="Tester User"/>
+            <column name="age" valueNumeric="25"/>
+        </insert>
+
+    </changeSet>
+</databaseChangeLog>

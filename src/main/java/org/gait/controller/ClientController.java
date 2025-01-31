@@ -5,8 +5,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.gait.database.entity.UserEntity;
 import org.gait.database.repository.UserRepository;
 import org.gait.database.service.EndpointCallService;
+import org.gait.database.service.UserService;
 import org.gait.dto.ClientRequest;
 import org.gait.security.UserDetailsImpl;
+import org.gait.service.ClientService;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,19 +18,15 @@ import org.springframework.web.bind.annotation.*;
 @Slf4j
 public class ClientController {
 
-    private final UserRepository userRepository;
     private final EndpointCallService endpointCallService;
+    private final ClientService clientService;
+    private final UserService  userService;
 
     // 1) Example POST endpoint at /client/use-api
     @PostMapping("/use-api")
     public String useOpenApi(@RequestBody ClientRequest request, Authentication authentication) {
 
-        // 2) The 'Authentication' object has principal = our user details
-        UserDetailsImpl principal = (UserDetailsImpl) authentication.getPrincipal();
-
-        // 3) Find the user in DB (assuming the principal's email is the "username")
-        UserEntity user = userRepository.findByEmail(principal.getUsername())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        UserEntity user = userService.getUserEntity(authentication);
 
         // 4) For demonstration, let's log it
         log.info("CLIENT user={} is calling api={}, with prompt='{}'",

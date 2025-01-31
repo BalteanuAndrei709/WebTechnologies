@@ -4,13 +4,18 @@ import lombok.RequiredArgsConstructor;
 import org.gait.database.entity.EndpointCallEntity;
 import org.gait.database.entity.UserEntity;
 import org.gait.database.repository.EndpointCallRepository;
+import org.gait.database.repository.UserRepository;
 import org.gait.dto.Api;
+import org.gait.dto.EndpointCall;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class EndpointCallService {
 
+    private final UserRepository userRepository;
     private final EndpointCallRepository endpointCallRepository;
 
     /**
@@ -34,6 +39,21 @@ public class EndpointCallService {
         // Increment
         endpointCall.setCallCount(endpointCall.getCallCount() + 1);
         endpointCallRepository.save(endpointCall);
+    }
+
+    public List<EndpointCall> getCallStats() {
+
+        List<EndpointCallEntity> endpointCallEntityList = endpointCallRepository.findAll();
+
+        // Map each EndpointCallEntity to an EndpointCallDto
+        return endpointCallEntityList
+                .stream()
+                .map(entity ->
+                        new EndpointCall(
+                                entity.getUser().getEmail(),
+                                entity.getEndpointName(),
+                                entity.getCallCount()))
+                .toList();
     }
 
 }

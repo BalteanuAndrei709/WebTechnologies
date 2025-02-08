@@ -1,0 +1,23 @@
+@prefix ex: <http://example.org/ontology#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# --- Mapping for the "user" target ---
+ex:UserConcept a rdfs:Class ;
+               rdfs:label "user" ;
+               ex:mapsToGraphQLType "User" ;
+               ex:mapsToField "user" ;
+               ex:identifierArgument "login" .
+
+# --- Mapping for the "repositories" concept ---
+ex:RepositoriesConcept a rdfs:Class ;
+                       rdfs:label "repositories" ;
+                       ex:mapsToGraphQLType "Repository" ;
+                       ex:mapsToField "repositories" .
+
+# --- Mapping for the ordering constraint "most starred" ---
+ex:MostStarredConstraint a rdfs:Class ;
+                         rdfs:label "most starred" ;
+                         ex:mapsToArgumentField "orderBy" ;
+                         # Update the value here to match the expected enum value.
+                         ex:mapsToOrderingField "STARGAZERS" ;
+                         ex:defaultDirection "DESC" .

@@ -80,6 +80,17 @@
             <groupId>org.liquibase</groupId>
             <artifactId>liquibase-core</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.apache.jena</groupId>
+            <artifactId>jena-core</artifactId>
+            <version>4.8.0</version>
+        </dependency>
+        <!-- SPARQL query engine (ARQ) -->
+        <dependency>
+            <groupId>org.apache.jena</groupId>
+            <artifactId>jena-arq</artifactId>
+            <version>4.8.0</version>
+        </dependency>
     </dependencies>
 
     <build>

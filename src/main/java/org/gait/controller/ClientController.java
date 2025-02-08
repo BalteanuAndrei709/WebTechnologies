@@ -24,13 +24,15 @@ public class ClientController {
 
     // 1) Example POST endpoint at /client/use-api
     @PostMapping("/use-api")
-    public String useOpenApi(@RequestBody ClientRequest request, Authentication authentication) {
+    public String createPrompt(@RequestBody ClientRequest request, Authentication authentication) {
 
         UserEntity user = userService.getUserEntity(authentication);
 
         // 4) For demonstration, let's log it
         log.info("CLIENT user={} is calling api={}, with prompt='{}'",
                 user.getEmail(), request.getApi(), request.getPrompt());
+
+        clientService.createPrompt(request);
 
         // 5) (Optional) Count or store the call
         endpointCallService.incrementCallCount(user, request.getApi());

@@ -1,0 +1,2 @@
+user_id,age,email,fullname,password,role_id
+1,30,john.doe@example.com,John Doe,$2a$10$1noaKpNLQkUXwvj5iohhgub2.olO.Gcei13ZZ1uwCoodxd27yz0Qq,3

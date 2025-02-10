@@ -15,4 +15,5 @@ public class NLPResponse {
     private int limit;
     private List<String> constraints;
     private List<String> fields;
+    private String api; // e.g., "github" or "countries"
 }

@@ -2,5 +2,5 @@
 
     public enum Api {
         GITHUB,
-        SPACEX
+        COUNTRIES
     }

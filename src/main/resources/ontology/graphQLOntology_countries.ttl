@@ -1,0 +1,15 @@
+@prefix ex: <http://example.org/ontology#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# --- Mapping for a country ---
+ex:CountryConcept a rdfs:Class ;
+                  rdfs:label "country" ;
+                  ex:mapsToGraphQLType "Country" ;
+                  ex:mapsToField "country" ;
+                  ex:identifierArgument "code" .
+
+# --- Mapping for a continent ---
+ex:ContinentConcept a rdfs:Class ;
+                    rdfs:label "continent" ;
+                    ex:mapsToGraphQLType "Continent" ;
+                    ex:mapsToField "continent" .

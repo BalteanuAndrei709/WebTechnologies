@@ -1,17 +1,13 @@
 package org.gait.service;
 
-import org.apache.jena.query.Query;
-import org.apache.jena.query.QueryExecution;
-import org.apache.jena.query.QueryFactory;
-import org.apache.jena.query.QuerySolution;
-import org.apache.jena.query.ResultSet;
+import org.apache.jena.query.*;
 import org.apache.jena.sparql.exec.http.QueryExecutionHTTP;
 import org.apache.jena.sparql.exec.http.QuerySendMode;
 import org.apache.jena.update.UpdateExecutionFactory;
 import org.apache.jena.update.UpdateFactory;
 import org.apache.jena.update.UpdateProcessor;
 import org.apache.jena.update.UpdateRequest;
-import org.gait.dto.CacheOntology;
+import org.gait.vocabulary.CacheOntology;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -32,14 +28,14 @@ public class BlazegraphCacheService {
 
     /**
      * Generates a unique URI for a given prompt.
-     * (For production, consider using a cryptographic hash.)
+     * (In production, consider using a cryptographic hash.)
      */
     public String generatePromptURI(String prompt) {
         return "urn:prompt:" + URLEncoder.encode(prompt, StandardCharsets.UTF_8);
     }
 
     /**
-     * Escapes double quotes and removes newlines from the input.
+     * Sanitizes the input by escaping double quotes and removing newlines.
      */
     private String sanitize(String input) {
         if (input == null) return "";
@@ -47,22 +43,17 @@ public class BlazegraphCacheService {
     }
 
     /**
-     * Caches the provided data in Blazegraph along with the current timestamp.
+     * Saves a cache entry with the user prompt, the final GraphQL result, and the creation timestamp.
      */
-    public void saveCacheEntry(String prompt, String nlpResponse, String sparqlQuery, String graphQLResult) {
+    public void saveCacheEntry(String prompt, String graphQLResult) {
         String promptURI = generatePromptURI(prompt);
         String safePrompt = sanitize(prompt);
-        String safeNlpResponse = sanitize(nlpResponse);
-        String safeSparqlQuery = sanitize(sparqlQuery);
         String safeGraphQLResult = sanitize(graphQLResult);
         String timestamp = Instant.now().toString();  // ISO-8601
-
         String updateString = PREFIXES +
                 "INSERT DATA { " +
                 "  <" + promptURI + "> a <" + CacheOntology.CachedEntry + "> ; " +
                 "    <" + CacheOntology.originalPrompt + "> \"" + safePrompt + "\" ; " +
-                "    <" + CacheOntology.hasNLPResponse + "> \"" + safeNlpResponse + "\" ; " +
-                "    <" + CacheOntology.hasSPARQLQuery + "> \"" + safeSparqlQuery + "\" ; " +
                 "    <" + CacheOntology.hasGraphQLResult + "> \"" + safeGraphQLResult + "\" ; " +
                 "    <" + CacheOntology.createdAt + "> \"" + timestamp + "\"^^xsd:dateTime ." +
                 "}";
@@ -73,16 +64,13 @@ public class BlazegraphCacheService {
 
     /**
      * Retrieves the cached entry for the given prompt.
-     * If the entry is older than 10 minutes, it is considered expired,
-     * deleted, and null is returned.
+     * If the entry is older than 10 minutes, it is deleted and null is returned.
      */
     public CachedEntry fetchCacheEntry(String prompt) {
         String promptURI = generatePromptURI(prompt);
         String queryString = PREFIXES +
-                "SELECT ?nlpResponse ?sparqlQuery ?graphQLResult ?createdAt WHERE { " +
+                "SELECT ?graphQLResult ?createdAt WHERE { " +
                 "  <" + promptURI + "> a <" + CacheOntology.CachedEntry + "> ; " +
-                "    <" + CacheOntology.hasNLPResponse + "> ?nlpResponse ; " +
-                "    <" + CacheOntology.hasSPARQLQuery + "> ?sparqlQuery ; " +
                 "    <" + CacheOntology.hasGraphQLResult + "> ?graphQLResult ; " +
                 "    <" + CacheOntology.createdAt + "> ?createdAt ." +
                 "}";
@@ -95,24 +83,22 @@ public class BlazegraphCacheService {
             ResultSet results = qexec.execSelect();
             if (results.hasNext()) {
                 QuerySolution sol = results.nextSolution();
-                String nlpResp = sol.getLiteral("nlpResponse").getString();
-                String sparqlQ = sol.getLiteral("sparqlQuery").getString();
                 String graphQLResult = sol.getLiteral("graphQLResult").getString();
                 String createdAtStr = sol.getLiteral("createdAt").getString();
                 Instant createdAt = Instant.parse(createdAtStr);
-                // Check expiration (10 minutes).
+                // Expire after 10 minutes.
                 if (Duration.between(createdAt, Instant.now()).toMinutes() >= 10) {
                     removeCacheEntry(prompt);
                     return null;
                 }
-                return new CachedEntry(prompt, nlpResp, sparqlQ, graphQLResult);
+                return new CachedEntry(prompt, graphQLResult, createdAtStr);
             }
         }
         return null;
     }
 
     /**
-     * Deletes the cached entry for the specified prompt.
+     * Deletes the cache entry for the given prompt.
      */
     public void removeCacheEntry(String prompt) {
         String promptURI = generatePromptURI(prompt);
@@ -124,19 +110,17 @@ public class BlazegraphCacheService {
     }
 
     /**
-     * DTO representing a cached entry.
+     * DTO for a cached entry.
      */
     public static class CachedEntry {
         public final String prompt;
-        public final String nlpResponse;
-        public final String sparqlQuery;
         public final String graphQLResult;
+        public final String createdAt;
 
-        public CachedEntry(String prompt, String nlpResponse, String sparqlQuery, String graphQLResult) {
+        public CachedEntry(String prompt, String graphQLResult, String createdAt) {
             this.prompt = prompt;
-            this.nlpResponse = nlpResponse;
-            this.sparqlQuery = sparqlQuery;
             this.graphQLResult = graphQLResult;
+            this.createdAt = createdAt;
         }
     }
 }

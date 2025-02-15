@@ -30,6 +30,7 @@ public class ClientService {
 
     /**
      * Processes a client prompt and returns the final GraphQL API result.
+     * First checks for a cached result; if none is found, it processes the prompt.
      */
     public String handleClientPrompt(ClientRequest request) {
         String prompt = request.getPrompt();
@@ -39,7 +40,6 @@ public class ClientService {
             BlazegraphCacheService.CachedEntry cached = cacheService.fetchCacheEntry(prompt);
             if (cached != null) {
                 System.out.println("Cache hit!");
-                System.out.println("Cached SPARQL Query: " + cached.sparqlQuery);
                 System.out.println("Cached GraphQL Result: " + cached.graphQLResult);
                 return cached.graphQLResult;
             }
@@ -47,16 +47,16 @@ public class ClientService {
             e.printStackTrace();
         }
 
-        // No valid cache: obtain NLP response.
+        // No cache found: call NLP service.
         String nlpResponse = callNlpService(request);
         System.out.println("Received NLP response: " + nlpResponse);
 
-        // Process the NLP response and generate the GraphQL result.
+        // Process the NLP response to build and execute the GraphQL query.
         return processNlpResponse(nlpResponse, prompt);
     }
 
     /**
-     * Simulates an NLP service call.
+     * Simulates a call to an NLP service.
      */
     public String callNlpService(ClientRequest request) {
         String api = request.getApi().toString();
@@ -93,7 +93,7 @@ public class ClientService {
      * - Loading the appropriate ontology.
      * - Building the SPARQL and GraphQL queries.
      * - Invoking the external GraphQL API.
-     * - Caching the result.
+     * - Caching the final result.
      * Returns the final GraphQL API result.
      */
     public String processNlpResponse(String nlpResponse, String originalPrompt) {
@@ -125,7 +125,7 @@ public class ClientService {
                 return "";
             }
 
-            // Get target mapping.
+            // Retrieve target mapping.
             String targetSparql = "PREFIX ex: <http://example.org/ontology#> " +
                     "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> " +
                     "SELECT ?targetField ?identifierArgument WHERE { " +
@@ -145,7 +145,7 @@ public class ClientService {
                 }
             }
 
-            // Get sub-entity mapping.
+            // Retrieve sub-entity mapping.
             String subEntitySparql = "PREFIX ex: <http://example.org/ontology#> " +
                     "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> " +
                     "SELECT ?subEntityField ?graphqlType ?argumentField ?orderingField ?defaultDirection WHERE { " +
@@ -185,13 +185,13 @@ public class ClientService {
             System.out.println("Generated GraphQL Query:");
             System.out.println(graphQLQuery);
 
-            // Execute the external GraphQL API call.
+            // Call the external GraphQL API.
             String graphQLResult = queryExternalGraphQLApi(graphQLQuery, response.getApi());
             System.out.println("GraphQL API response:");
             System.out.println(graphQLResult);
 
-            // Cache the result.
-            cacheService.saveCacheEntry(originalPrompt, nlpResponse, graphQLQuery, graphQLResult);
+            // Cache the final result (storing only the prompt and final GraphQL result).
+            cacheService.saveCacheEntry(originalPrompt, graphQLResult);
 
             return graphQLResult;
         } catch (IOException e) {
@@ -233,7 +233,8 @@ public class ClientService {
                     .append(": \"").append(response.getIdentifier()).append("\") {\n");
             sb.append("    ").append(subEntityField).append("(first: ").append(response.getLimit());
             if (!argumentField.isEmpty() && !orderingField.isEmpty() && !defaultDirection.isEmpty()) {
-                sb.append(", ").append(argumentField).append(": { field: ").append(orderingField)
+                sb.append(", ").append(argumentField)
+                        .append(": { field: ").append(orderingField)
                         .append(", direction: ").append(defaultDirection).append(" }");
             }
             sb.append(") {\n");
@@ -250,7 +251,7 @@ public class ClientService {
     }
 
     /**
-     * Executes a GraphQL API call to an external endpoint and returns the result.
+     * Executes the GraphQL API call to an external endpoint and returns the result.
      */
     public String queryExternalGraphQLApi(String graphQLQuery, String api) {
         String publicEndpoint;

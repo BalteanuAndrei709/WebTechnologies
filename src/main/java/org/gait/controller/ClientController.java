@@ -7,8 +7,11 @@ import org.gait.database.service.EndpointCallService;
 import org.gait.database.service.UserService;
 import org.gait.dto.ClientRequest;
 import org.gait.service.ClientService;
+import org.gait.service.UserHistoryService;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/client")
@@ -19,6 +22,7 @@ public class ClientController {
     private final EndpointCallService endpointCallService;
     private final ClientService clientService;
     private final UserService userService;
+    private final UserHistoryService userHistoryService;
 
     // POST endpoint: process a client prompt and return the GraphQL API result.
     @PostMapping("/use-api")
@@ -32,8 +36,14 @@ public class ClientController {
 
         // Increment the call count.
         endpointCallService.incrementCallCount(user, request.getApi());
+        userHistoryService.saveUserHistory(String.valueOf(user.getId()),request.getPrompt());
 
         // Return the GraphQL result to the caller.
         return graphQLResponse;
+    }
+
+    @GetMapping("/{userId}")
+    public List<UserHistoryService.UserHistoryEntry> getUserHistory(@PathVariable String userId) {
+        return userHistoryService.getHistoryForUser(userId);
     }
 }

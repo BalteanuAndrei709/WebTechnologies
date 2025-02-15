@@ -3,40 +3,26 @@
 @prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
 @prefix cache: <http://example.org/cache#> .
 
-# Define the class for a cached entry
+# Class for a cached entry.
 cache:CachedEntry a rdfs:Class ;
                   rdfs:label "Cached Entry" ;
-                  rdfs:comment "A cached entry that stores a user prompt, the corresponding NLP response, the generated SPARQL query, the final GraphQL API result, and the creation timestamp." .
+                  rdfs:comment "A cached entry that stores a user prompt, the corresponding final GraphQL API result, and the creation timestamp." .
 
-# Property for the original user prompt
+# Property for the original user prompt.
 cache:originalPrompt a rdf:Property ;
                      rdfs:label "original prompt" ;
                      rdfs:comment "The original user prompt." ;
                      rdfs:domain cache:CachedEntry ;
                      rdfs:range xsd:string .
 
-# Property for the NLP response
-cache:hasNLPResponse a rdf:Property ;
-                     rdfs:label "has NLP response" ;
-                     rdfs:comment "The NLP response generated from the user prompt." ;
-                     rdfs:domain cache:CachedEntry ;
-                     rdfs:range xsd:string .
-
-# Property for the SPARQL query
-cache:hasSPARQLQuery a rdf:Property ;
-                     rdfs:label "has SPARQL query" ;
-                     rdfs:comment "The SPARQL query generated based on the NLP response." ;
-                     rdfs:domain cache:CachedEntry ;
-                     rdfs:range xsd:string .
-
-# Property for the final GraphQL API result
+# Property for the final GraphQL API result.
 cache:hasGraphQLResult a rdf:Property ;
                        rdfs:label "has GraphQL result" ;
                        rdfs:comment "The final GraphQL API response corresponding to the user prompt." ;
                        rdfs:domain cache:CachedEntry ;
                        rdfs:range xsd:string .
 
-# Property for the creation timestamp of the cache entry
+# Property for the creation timestamp.
 cache:createdAt a rdf:Property ;
                 rdfs:label "created at" ;
                 rdfs:comment "The timestamp when the cache entry was created." ;

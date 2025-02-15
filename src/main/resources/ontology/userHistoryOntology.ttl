@@ -1,0 +1,30 @@
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix uh: <http://example.org/userhistory#> .
+
+# Class for a user history record.
+uh:UserHistory a rdfs:Class ;
+               rdfs:label "User History" ;
+               rdfs:comment "A record that stores a user ID, the user prompt, and the creation timestamp." .
+
+# Property for the user ID.
+uh:userId a rdf:Property ;
+          rdfs:label "User ID" ;
+          rdfs:comment "The unique identifier of the user." ;
+          rdfs:domain uh:UserHistory ;
+          rdfs:range xsd:string .
+
+# Property for the prompt.
+uh:prompt a rdf:Property ;
+          rdfs:label "Prompt" ;
+          rdfs:comment "The prompt provided by the user." ;
+          rdfs:domain uh:UserHistory ;
+          rdfs:range xsd:string .
+
+# Property for the creation timestamp.
+uh:createdAt a rdf:Property ;
+             rdfs:label "Created At" ;
+             rdfs:comment "The timestamp when this history record was created." ;
+             rdfs:domain uh:UserHistory ;
+             rdfs:range xsd:dateTime .

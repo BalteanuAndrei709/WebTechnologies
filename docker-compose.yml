@@ -19,7 +19,7 @@ services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile   # Dockerfile for your IntelliJ/Spring Boot app (at the project root)
+      dockerfile: Dockerfile   # Dockerfile for your Spring Boot app
     container_name: intellij_app
     restart: always
     depends_on:
@@ -31,19 +31,16 @@ services:
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      # Liquibase manages schema; disable Hibernate auto DDL
-      # SPRING_JPA_HIBERNATE_DDL_AUTO: update
-      JWT_SECRET: CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_STRING_ABC123
-      JWT_EXPIRATION_MS: 86400000
-      SPRING_LIQUIBASE_CHANGE_LOG: classpath:db/changelog/db.changelog-master.xml
-      # Configure Blazegraph endpoint using Docker service name:
+      spring.liquibase.change-log: classpath:db/changelog/db.changelog-master.xml
+      jwt.secret: CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_STRING_ABC123
+      jwt.expiration-ms: 86400000
       BLAZEGRAPH_ENDPOINT: http://blazegraph:9999/blazegraph/namespace/kb/sparql
     ports:
       - "8080:8080"
 
   blazegraph:
     build:
-      context: ./blazegraph   # This folder contains the Dockerfile for Blazegraph and your blazegraph.jar
+      context: ./blazegraph   # Folder containing your Blazegraph Dockerfile and jar
       dockerfile: Dockerfile
     container_name: blazegraph
     restart: always

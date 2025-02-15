@@ -26,16 +26,37 @@ public class ClientService {
     private final RestTemplate restTemplate;
     private final ResourceLoader resourceLoader;
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final BlazegraphCacheService blazegraphCacheService;
+    private final BlazegraphCacheService cacheService;
 
-    public void createPrompt(ClientRequest request) {
+    /**
+     * Processes a client prompt and returns the final GraphQL API result.
+     */
+    public String handleClientPrompt(ClientRequest request) {
+        String prompt = request.getPrompt();
+
+        // Check if a valid cached entry exists.
+        try {
+            BlazegraphCacheService.CachedEntry cached = cacheService.fetchCacheEntry(prompt);
+            if (cached != null) {
+                System.out.println("Cache hit!");
+                System.out.println("Cached SPARQL Query: " + cached.sparqlQuery);
+                System.out.println("Cached GraphQL Result: " + cached.graphQLResult);
+                return cached.graphQLResult;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        // No valid cache: obtain NLP response.
         String nlpResponse = callNlpService(request);
         System.out.println("Received NLP response: " + nlpResponse);
-        processNlpResponse(nlpResponse, request.getPrompt());
+
+        // Process the NLP response and generate the GraphQL result.
+        return processNlpResponse(nlpResponse, prompt);
     }
 
     /**
-     * Simulates calling an NLP service.
+     * Simulates an NLP service call.
      */
     public String callNlpService(ClientRequest request) {
         String api = request.getApi().toString();
@@ -67,28 +88,23 @@ public class ClientService {
     }
 
     /**
-     * Processes the NLP response. It first checks the cache; if there's a cache hit, it uses the cached data.
-     * Otherwise, it processes the prompt, generates the SPARQL query, caches the result, and calls the public API.
+     * Processes the NLP response by:
+     * - Parsing the response.
+     * - Loading the appropriate ontology.
+     * - Building the SPARQL and GraphQL queries.
+     * - Invoking the external GraphQL API.
+     * - Caching the result.
+     * Returns the final GraphQL API result.
      */
-    public void processNlpResponse(String nlpResponse, String originalPrompt) {
+    public String processNlpResponse(String nlpResponse, String originalPrompt) {
         try {
-            // Check cache first.
-            BlazegraphCacheService.CachedEntry cachedEntry = blazegraphCacheService.getCachedEntry(originalPrompt);
-            if (cachedEntry != null) {
-                System.out.println("Cache hit! Using cached data.");
-                System.out.println("Cached NLP Response: " + cachedEntry.nlpResponse);
-                System.out.println("Cached SPARQL Query: " + cachedEntry.sparqlQuery);
-                queryPublicGraphQLApi(cachedEntry.sparqlQuery, parseApiFromResponse(nlpResponse));
-                return;
-            }
-
-            // No cache; process normally.
             NLPResponse response = objectMapper.readValue(nlpResponse, NLPResponse.class);
             String target = response.getTarget();
             String subEntity = response.getSubEntity();
             List<String> constraints = response.getConstraints();
             String constraint = (constraints != null && !constraints.isEmpty()) ? constraints.get(0) : null;
 
+            // Select ontology file based on API.
             String ontologyFile;
             if ("github".equalsIgnoreCase(response.getApi())) {
                 ontologyFile = "classpath:ontology/graphQLOntology_github.ttl";
@@ -96,20 +112,21 @@ public class ClientService {
                 ontologyFile = "classpath:ontology/graphQLOntology_countries.ttl";
             } else {
                 System.err.println("Unknown API: " + response.getApi());
-                return;
+                return "";
             }
 
+            // Load the ontology.
             Resource ontologyResource = resourceLoader.getResource(ontologyFile);
             Model model = ModelFactory.createDefaultModel();
             try (InputStream in = ontologyResource.getInputStream()) {
                 model.read(in, null, "TTL");
             } catch (IOException e) {
                 System.err.println("Error loading ontology: " + e.getMessage());
-                return;
+                return "";
             }
 
-            // Query target mapping.
-            String targetSparqlQuery = "PREFIX ex: <http://example.org/ontology#> " +
+            // Get target mapping.
+            String targetSparql = "PREFIX ex: <http://example.org/ontology#> " +
                     "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> " +
                     "SELECT ?targetField ?identifierArgument WHERE { " +
                     "  ?targetConcept rdfs:label \"" + target + "\" ; " +
@@ -118,18 +135,18 @@ public class ClientService {
                     "}";
             String targetField = "";
             String identifierArgument = "";
-            Query targetQuery = QueryFactory.create(targetSparqlQuery);
+            Query targetQuery = QueryFactory.create(targetSparql);
             try (QueryExecution qexec = QueryExecutionFactory.create(targetQuery, model)) {
-                ResultSet targetResults = qexec.execSelect();
-                if (targetResults.hasNext()) {
-                    QuerySolution sol = targetResults.nextSolution();
+                ResultSet results = qexec.execSelect();
+                if (results.hasNext()) {
+                    QuerySolution sol = results.nextSolution();
                     targetField = sol.getLiteral("targetField").getString();
                     identifierArgument = sol.getLiteral("identifierArgument").getString();
                 }
             }
 
-            // Query sub-entity mapping.
-            String sparqlQuery = "PREFIX ex: <http://example.org/ontology#> " +
+            // Get sub-entity mapping.
+            String subEntitySparql = "PREFIX ex: <http://example.org/ontology#> " +
                     "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> " +
                     "SELECT ?subEntityField ?graphqlType ?argumentField ?orderingField ?defaultDirection WHERE { " +
                     "  ?concept rdfs:label \"" + subEntity + "\" ; " +
@@ -143,12 +160,12 @@ public class ClientService {
                                     "                      ex:defaultDirection ?defaultDirection . " +
                                     "  } " : "") +
                     "}";
-            Query query = QueryFactory.create(sparqlQuery);
+            Query subEntityQuery = QueryFactory.create(subEntitySparql);
             String subEntityField = "";
             String orderingField = "";
             String defaultDirection = "";
             String argumentField = "";
-            try (QueryExecution qexec = QueryExecutionFactory.create(query, model)) {
+            try (QueryExecution qexec = QueryExecutionFactory.create(subEntityQuery, model)) {
                 ResultSet results = qexec.execSelect();
                 if (results.hasNext()) {
                     QuerySolution sol = results.nextSolution();
@@ -162,22 +179,33 @@ public class ClientService {
                 }
             }
 
+            // Build the GraphQL query.
             String graphQLQuery = buildGraphQLQuery(response, targetField, identifierArgument,
                     subEntityField, argumentField, orderingField, defaultDirection);
             System.out.println("Generated GraphQL Query:");
             System.out.println(graphQLQuery);
 
-            // Cache the result.
-            blazegraphCacheService.cachePrompt(originalPrompt, nlpResponse, graphQLQuery);
-            queryPublicGraphQLApi(graphQLQuery, response.getApi());
+            // Execute the external GraphQL API call.
+            String graphQLResult = queryExternalGraphQLApi(graphQLQuery, response.getApi());
+            System.out.println("GraphQL API response:");
+            System.out.println(graphQLResult);
 
+            // Cache the result.
+            cacheService.saveCacheEntry(originalPrompt, nlpResponse, graphQLQuery, graphQLResult);
+
+            return graphQLResult;
         } catch (IOException e) {
             System.err.println("Error parsing NLP response: " + e.getMessage());
+            return "";
         } catch (Exception ex) {
             System.err.println("Processing error: " + ex.getMessage());
+            return "";
         }
     }
 
+    /**
+     * Builds a GraphQL query based on the NLP response and the retrieved mappings.
+     */
     public String buildGraphQLQuery(NLPResponse response,
                                     String targetField,
                                     String identifierArgument,
@@ -186,78 +214,68 @@ public class ClientService {
                                     String orderingField,
                                     String defaultDirection) {
         if ("countries".equalsIgnoreCase(response.getApi())) {
-            StringBuilder queryBuilder = new StringBuilder();
-            queryBuilder.append("query {\n");
-            queryBuilder.append("  ").append(targetField)
-                    .append("(").append(identifierArgument)
+            StringBuilder sb = new StringBuilder();
+            sb.append("query {\n");
+            sb.append("  ").append(targetField).append("(").append(identifierArgument)
                     .append(": \"").append(response.getIdentifier()).append("\") {\n");
-            queryBuilder.append("    ").append(subEntityField).append(" {\n");
+            sb.append("    ").append(subEntityField).append(" {\n");
             for (String field : response.getFields()) {
-                queryBuilder.append("      ").append(field).append("\n");
+                sb.append("      ").append(field).append("\n");
             }
-            queryBuilder.append("    }\n");
-            queryBuilder.append("  }\n");
-            queryBuilder.append("}\n");
-            return queryBuilder.toString();
+            sb.append("    }\n");
+            sb.append("  }\n");
+            sb.append("}\n");
+            return sb.toString();
         } else {
-            StringBuilder queryBuilder = new StringBuilder();
-            queryBuilder.append("query {\n");
-            queryBuilder.append("  ").append(targetField)
-                    .append("(").append(identifierArgument)
+            StringBuilder sb = new StringBuilder();
+            sb.append("query {\n");
+            sb.append("  ").append(targetField).append("(").append(identifierArgument)
                     .append(": \"").append(response.getIdentifier()).append("\") {\n");
-            queryBuilder.append("    ").append(subEntityField)
-                    .append("(first: ").append(response.getLimit());
+            sb.append("    ").append(subEntityField).append("(first: ").append(response.getLimit());
             if (!argumentField.isEmpty() && !orderingField.isEmpty() && !defaultDirection.isEmpty()) {
-                queryBuilder.append(", ").append(argumentField)
-                        .append(": { field: ").append(orderingField)
+                sb.append(", ").append(argumentField).append(": { field: ").append(orderingField)
                         .append(", direction: ").append(defaultDirection).append(" }");
             }
-            queryBuilder.append(") {\n");
-            queryBuilder.append("      nodes {\n");
+            sb.append(") {\n");
+            sb.append("      nodes {\n");
             for (String field : response.getFields()) {
-                queryBuilder.append("        ").append(field).append("\n");
+                sb.append("        ").append(field).append("\n");
             }
-            queryBuilder.append("      }\n");
-            queryBuilder.append("    }\n");
-            queryBuilder.append("  }\n");
-            queryBuilder.append("}\n");
-            return queryBuilder.toString();
+            sb.append("      }\n");
+            sb.append("    }\n");
+            sb.append("  }\n");
+            sb.append("}\n");
+            return sb.toString();
         }
     }
 
-    public void queryPublicGraphQLApi(String graphQLQuery, String api) {
-        String publicGraphQLEndpoint;
+    /**
+     * Executes a GraphQL API call to an external endpoint and returns the result.
+     */
+    public String queryExternalGraphQLApi(String graphQLQuery, String api) {
+        String publicEndpoint;
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
 
         if ("github".equalsIgnoreCase(api)) {
-            publicGraphQLEndpoint = "https://api.github.com/graphql";
-            headers.set("Authorization", "Bearer test123");
+            publicEndpoint = "https://api.github.com/graphql";
+            headers.set("Authorization", "Bearer YOUR_GITHUB_TOKEN");
         } else if ("countries".equalsIgnoreCase(api)) {
-            publicGraphQLEndpoint = "https://countries.trevorblades.com/";
+            publicEndpoint = "https://countries.trevorblades.com/";
         } else {
             System.err.println("Unknown API: " + api);
-            return;
+            return "";
         }
 
-        Map<String, String> requestBody = new HashMap<>();
-        requestBody.put("query", graphQLQuery);
-        HttpEntity<Map<String, String>> entity = new HttpEntity<>(requestBody, headers);
+        Map<String, String> body = new HashMap<>();
+        body.put("query", graphQLQuery);
+        HttpEntity<Map<String, String>> entity = new HttpEntity<>(body, headers);
 
-        ResponseEntity<String> response = restTemplate.postForEntity(publicGraphQLEndpoint, entity, String.class);
+        ResponseEntity<String> response = restTemplate.postForEntity(publicEndpoint, entity, String.class);
         if (response.getStatusCode().is2xxSuccessful()) {
-            System.out.println("GraphQL API response:");
-            System.out.println(response.getBody());
+            return response.getBody();
         } else {
             System.err.println("Error querying GraphQL API (" + api + "): " + response.getStatusCode());
-        }
-    }
-
-    private String parseApiFromResponse(String nlpResponse) {
-        try {
-            NLPResponse response = objectMapper.readValue(nlpResponse, NLPResponse.class);
-            return response.getApi();
-        } catch (Exception e) {
             return "";
         }
     }

@@ -6,7 +6,7 @@
 # Define the class for a cached entry
 cache:CachedEntry a rdfs:Class ;
                   rdfs:label "Cached Entry" ;
-                  rdfs:comment "A cached entry that stores a user prompt, the corresponding NLP response, and the generated SPARQL query." .
+                  rdfs:comment "A cached entry that stores a user prompt, the corresponding NLP response, the generated SPARQL query, the final GraphQL API result, and the creation timestamp." .
 
 # Property for the original user prompt
 cache:originalPrompt a rdf:Property ;
@@ -28,3 +28,17 @@ cache:hasSPARQLQuery a rdf:Property ;
                      rdfs:comment "The SPARQL query generated based on the NLP response." ;
                      rdfs:domain cache:CachedEntry ;
                      rdfs:range xsd:string .
+
+# Property for the final GraphQL API result
+cache:hasGraphQLResult a rdf:Property ;
+                       rdfs:label "has GraphQL result" ;
+                       rdfs:comment "The final GraphQL API response corresponding to the user prompt." ;
+                       rdfs:domain cache:CachedEntry ;
+                       rdfs:range xsd:string .
+
+# Property for the creation timestamp of the cache entry
+cache:createdAt a rdf:Property ;
+                rdfs:label "created at" ;
+                rdfs:comment "The timestamp when the cache entry was created." ;
+                rdfs:domain cache:CachedEntry ;
+                rdfs:range xsd:dateTime .

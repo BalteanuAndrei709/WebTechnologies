@@ -25,73 +25,70 @@ public class ClientService {
 
     private final RestTemplate restTemplate;
     private final ResourceLoader resourceLoader;
-    private final ObjectMapper objectMapper = new ObjectMapper(); // For JSON parsing
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final BlazegraphCacheService blazegraphCacheService;
 
     public void createPrompt(ClientRequest request) {
-        // 1. Call the NLP service to extract key elements from the prompt.
         String nlpResponse = callNlpService(request);
         System.out.println("Received NLP response: " + nlpResponse);
-
-        // 2. Process the NLP response: perform SPARQL queries against the appropriate ontology,
-        //    build the GraphQL query, and query the public API.
-        processNlpResponse(nlpResponse);
+        processNlpResponse(nlpResponse, request.getPrompt());
     }
 
     /**
-     * Simulates sending the ClientRequest to an external NLP service.
-     * Returns a JSON string with the extracted key elements.
-     * Here, we choose the response based on a property in ClientRequest.
+     * Simulates calling an NLP service.
      */
     public String callNlpService(ClientRequest request) {
-        // For demonstration, assume ClientRequest has a field "api" (either "github" or "countries")
         String api = request.getApi().toString();
         if ("countries".equalsIgnoreCase(api)) {
-            // Simulated NLP response for Countries API
-            return "{\n" +
-                    "  \"action\": \"QUERY\",\n" +
-                    "  \"target\": \"country\",\n" +
-                    "  \"identifier\": \"BR\",\n" +
-                    "  \"subEntity\": \"continent\",\n" +
-                    "  \"limit\": 1,\n" +
-                    "  \"constraints\": [],\n" +
-                    "  \"fields\": [\"name\", \"code\"],\n" +
-                    "  \"api\": \"countries\"\n" +
-                    "}";
+            return """
+                    {
+                      "action": "QUERY",
+                      "target": "country",
+                      "identifier": "BR",
+                      "subEntity": "continent",
+                      "limit": 1,
+                      "constraints": [],
+                      "fields": ["name", "code"],
+                      "api": "countries"
+                    }""";
         } else {
-            // Default to GitHub response
-            return "{\n" +
-                    "  \"action\": \"QUERY\",\n" +
-                    "  \"target\": \"user\",\n" +
-                    "  \"identifier\": \"octocat\",\n" +
-                    "  \"subEntity\": \"repositories\",\n" +
-                    "  \"limit\": 5,\n" +
-                    "  \"constraints\": [\"most starred\"],\n" +
-                    "  \"fields\": [\"name\", \"description\", \"stargazerCount\"],\n" +
-                    "  \"api\": \"github\"\n" +
-                    "}";
+            return """
+                    {
+                      "action": "QUERY",
+                      "target": "user",
+                      "identifier": "octocat",
+                      "subEntity": "repositories",
+                      "limit": 5,
+                      "constraints": ["most starred"],
+                      "fields": ["name", "description", "stargazerCount"],
+                      "api": "github"
+                    }""";
         }
     }
 
     /**
-     * Processes the NLP service response by:
-     * - Parsing the JSON.
-     * - Loading the appropriate ontology file based on the 'api' field.
-     * - Running SPARQL queries to dynamically resolve both the target mapping and the sub-entity mapping.
-     * - Building the GraphQL query string.
-     * - Querying the public GraphQL API with the generated query.
+     * Processes the NLP response. It first checks the cache; if there's a cache hit, it uses the cached data.
+     * Otherwise, it processes the prompt, generates the SPARQL query, caches the result, and calls the public API.
      */
-    public void processNlpResponse(String nlpResponse) {
+    public void processNlpResponse(String nlpResponse, String originalPrompt) {
         try {
-            // Parse the NLP JSON into an NLPResponse DTO.
-            NLPResponse response = objectMapper.readValue(nlpResponse, NLPResponse.class);
+            // Check cache first.
+            BlazegraphCacheService.CachedEntry cachedEntry = blazegraphCacheService.getCachedEntry(originalPrompt);
+            if (cachedEntry != null) {
+                System.out.println("Cache hit! Using cached data.");
+                System.out.println("Cached NLP Response: " + cachedEntry.nlpResponse);
+                System.out.println("Cached SPARQL Query: " + cachedEntry.sparqlQuery);
+                queryPublicGraphQLApi(cachedEntry.sparqlQuery, parseApiFromResponse(nlpResponse));
+                return;
+            }
 
-            // Retrieve the target and sub-entity from the NLP response.
+            // No cache; process normally.
+            NLPResponse response = objectMapper.readValue(nlpResponse, NLPResponse.class);
             String target = response.getTarget();
             String subEntity = response.getSubEntity();
             List<String> constraints = response.getConstraints();
             String constraint = (constraints != null && !constraints.isEmpty()) ? constraints.get(0) : null;
 
-            // Determine which ontology file to load based on the API.
             String ontologyFile;
             if ("github".equalsIgnoreCase(response.getApi())) {
                 ontologyFile = "classpath:ontology/graphQLOntology_github.ttl";
@@ -102,7 +99,6 @@ public class ClientService {
                 return;
             }
 
-            // Load the ontology from the classpath.
             Resource ontologyResource = resourceLoader.getResource(ontologyFile);
             Model model = ModelFactory.createDefaultModel();
             try (InputStream in = ontologyResource.getInputStream()) {
@@ -112,11 +108,10 @@ public class ClientService {
                 return;
             }
 
-            // --- Query for the target mapping ---
+            // Query target mapping.
             String targetSparqlQuery = "PREFIX ex: <http://example.org/ontology#> " +
                     "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> " +
-                    "SELECT ?targetField ?identifierArgument " +
-                    "WHERE { " +
+                    "SELECT ?targetField ?identifierArgument WHERE { " +
                     "  ?targetConcept rdfs:label \"" + target + "\" ; " +
                     "                 ex:mapsToField ?targetField ; " +
                     "                 ex:identifierArgument ?identifierArgument . " +
@@ -133,11 +128,10 @@ public class ClientService {
                 }
             }
 
-            // --- Query for the sub-entity mapping and constraint ---
+            // Query sub-entity mapping.
             String sparqlQuery = "PREFIX ex: <http://example.org/ontology#> " +
                     "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> " +
-                    "SELECT ?subEntityField ?graphqlType ?argumentField ?orderingField ?defaultDirection " +
-                    "WHERE { " +
+                    "SELECT ?subEntityField ?graphqlType ?argumentField ?orderingField ?defaultDirection WHERE { " +
                     "  ?concept rdfs:label \"" + subEntity + "\" ; " +
                     "           ex:mapsToGraphQLType ?graphqlType ; " +
                     "           ex:mapsToField ?subEntityField . " +
@@ -168,57 +162,22 @@ public class ClientService {
                 }
             }
 
-            // Generate the GraphQL query using both target and sub-entity mappings.
             String graphQLQuery = buildGraphQLQuery(response, targetField, identifierArgument,
                     subEntityField, argumentField, orderingField, defaultDirection);
             System.out.println("Generated GraphQL Query:");
             System.out.println(graphQLQuery);
 
-            // Query the public GraphQL API using the generated query.
+            // Cache the result.
+            blazegraphCacheService.cachePrompt(originalPrompt, nlpResponse, graphQLQuery);
             queryPublicGraphQLApi(graphQLQuery, response.getApi());
 
         } catch (IOException e) {
             System.err.println("Error parsing NLP response: " + e.getMessage());
+        } catch (Exception ex) {
+            System.err.println("Processing error: " + ex.getMessage());
         }
     }
 
-    /**
-     * Queries the appropriate public GraphQL API using the provided GraphQL query.
-     * Chooses the endpoint (and headers, if necessary) based on the API.
-     */
-    public void queryPublicGraphQLApi(String graphQLQuery, String api) {
-        String publicGraphQLEndpoint;
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-
-        if ("github".equalsIgnoreCase(api)) {
-            publicGraphQLEndpoint = "https://api.github.com/graphql";
-            // For GitHub, set your authorization token here.
-            headers.set("Authorization", "Bearer my_git_token");
-        } else if ("countries".equalsIgnoreCase(api)) {
-            publicGraphQLEndpoint = "https://countries.trevorblades.com/";
-            // No authorization needed for the Countries API.
-        } else {
-            System.err.println("Unknown API: " + api);
-            return;
-        }
-
-        Map<String, String> requestBody = new HashMap<>();
-        requestBody.put("query", graphQLQuery);
-        HttpEntity<Map<String, String>> entity = new HttpEntity<>(requestBody, headers);
-
-        ResponseEntity<String> response = restTemplate.postForEntity(publicGraphQLEndpoint, entity, String.class);
-        if (response.getStatusCode().is2xxSuccessful()) {
-            System.out.println("GraphQL API response:");
-            System.out.println(response.getBody());
-        } else {
-            System.err.println("Error querying GraphQL API (" + api + "): " + response.getStatusCode());
-        }
-    }
-    /**
-     * Constructs a GraphQL query string using the extracted NLP response and the mappings from the ontology.
-     * Adjusts the query format based on the API (e.g., "countries" vs. "github").
-     */
     public String buildGraphQLQuery(NLPResponse response,
                                     String targetField,
                                     String identifierArgument,
@@ -226,14 +185,12 @@ public class ClientService {
                                     String argumentField,
                                     String orderingField,
                                     String defaultDirection) {
-        // If the API is "countries", generate a simple nested query.
         if ("countries".equalsIgnoreCase(response.getApi())) {
             StringBuilder queryBuilder = new StringBuilder();
             queryBuilder.append("query {\n");
             queryBuilder.append("  ").append(targetField)
                     .append("(").append(identifierArgument)
                     .append(": \"").append(response.getIdentifier()).append("\") {\n");
-            // For the Countries API, we assume the sub-entity (e.g., "continent") is a simple object field.
             queryBuilder.append("    ").append(subEntityField).append(" {\n");
             for (String field : response.getFields()) {
                 queryBuilder.append("      ").append(field).append("\n");
@@ -242,9 +199,7 @@ public class ClientService {
             queryBuilder.append("  }\n");
             queryBuilder.append("}\n");
             return queryBuilder.toString();
-        }
-        // Otherwise, for APIs like GitHub, use the connection pattern.
-        else {
+        } else {
             StringBuilder queryBuilder = new StringBuilder();
             queryBuilder.append("query {\n");
             queryBuilder.append("  ").append(targetField)
@@ -270,4 +225,40 @@ public class ClientService {
         }
     }
 
+    public void queryPublicGraphQLApi(String graphQLQuery, String api) {
+        String publicGraphQLEndpoint;
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        if ("github".equalsIgnoreCase(api)) {
+            publicGraphQLEndpoint = "https://api.github.com/graphql";
+            headers.set("Authorization", "Bearer test123");
+        } else if ("countries".equalsIgnoreCase(api)) {
+            publicGraphQLEndpoint = "https://countries.trevorblades.com/";
+        } else {
+            System.err.println("Unknown API: " + api);
+            return;
+        }
+
+        Map<String, String> requestBody = new HashMap<>();
+        requestBody.put("query", graphQLQuery);
+        HttpEntity<Map<String, String>> entity = new HttpEntity<>(requestBody, headers);
+
+        ResponseEntity<String> response = restTemplate.postForEntity(publicGraphQLEndpoint, entity, String.class);
+        if (response.getStatusCode().is2xxSuccessful()) {
+            System.out.println("GraphQL API response:");
+            System.out.println(response.getBody());
+        } else {
+            System.err.println("Error querying GraphQL API (" + api + "): " + response.getStatusCode());
+        }
+    }
+
+    private String parseApiFromResponse(String nlpResponse) {
+        try {
+            NLPResponse response = objectMapper.readValue(nlpResponse, NLPResponse.class);
+            return response.getApi();
+        } catch (Exception e) {
+            return "";
+        }
+    }
 }

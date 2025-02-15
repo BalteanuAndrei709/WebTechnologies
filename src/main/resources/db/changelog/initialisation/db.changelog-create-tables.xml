@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.9.xsd">
+
+    <!-- ChangeSet 1: Create ROLE table -->
+    <changeSet id="1-create-role-table" author="Andrei">
+        <createTable tableName="ROLE">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="role" type="VARCHAR(50)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <!-- ChangeSet 2: Create APP_USER table -->
+    <changeSet id="2-create-app-user-table" author="Andrei">
+        <createTable tableName="APP_USER">
+            <column name="USER_ID" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="EMAIL" type="VARCHAR(255)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="FULLNAME" type="VARCHAR(255)"/>
+            <column name="AGE" type="INT"/>
+            <column name="PASSWORD" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ROLE_ID" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <!-- Add foreign key constraint to ROLE table -->
+        <addForeignKeyConstraint
+                constraintName="fk_app_user_role"
+                baseTableName="APP_USER"
+                baseColumnNames="ROLE_ID"
+                referencedTableName="ROLE"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+    </changeSet>
+
+    <!-- ChangeSet 3: Create endpoint_call table -->
+    <changeSet id="3-create-endpoint-call-table" author="Andrei">
+        <createTable tableName="endpoint_call">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="endpoint_name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="call_count" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <!-- Add foreign key constraint to APP_USER table -->
+        <addForeignKeyConstraint
+                constraintName="fk_endpoint_call_user"
+                baseTableName="endpoint_call"
+                baseColumnNames="user_id"
+                referencedTableName="APP_USER"
+                referencedColumnNames="USER_ID"
+                onDelete="CASCADE"/>
+        <!-- Add unique constraint on (user_id, endpoint_name) -->
+        <addUniqueConstraint
+                tableName="endpoint_call"
+                columnNames="user_id, endpoint_name"
+                constraintName="uk_endpoint_call_user_endpoint"/>
+    </changeSet>
+
+</databaseChangeLog>
